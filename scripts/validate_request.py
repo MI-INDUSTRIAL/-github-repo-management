@@ -1,20 +1,63 @@
-import argparse 
-from common import load_request, repo_name 
- 
-parser = argparse.ArgumentParser() 
-parser.add_argument("request_file") 
-args = parser.parse_args() 
- 
-data = load_request(args.request_file) 
-name = repo_name(data) 
-expected_file = f"requests/{name}.yml" 
-actual_file = args.request_file.replace("\\", "/") 
- 
-if actual_file != expected_file: 
-    raise ValueError( 
-        f"Request filename must match generated repository name: {expected_file}" 
-    ) 
- 
-print(f"VALID: {actual_file}") 
-print(f"Repository: {name}") 
-print(f"Visibility: {data['visibility']}")
+import argparse
+
+from common import (
+    load_registry,
+    validate_repository,
+    repo_name,
+)
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "registry_file",
+    nargs="?",
+    default="requests/repository-requests.yml",
+)
+
+args = parser.parse_args()
+
+
+repositories = load_registry(args.registry_file)
+
+
+if not repositories:
+
+    print("Repository registry is valid.")
+    print("Repositories found: 0")
+    print("No repository requests currently exist.")
+
+    raise SystemExit(0)
+
+
+names = set()
+
+
+for index, repository in enumerate(
+    repositories,
+    start=1,
+):
+
+    repository = validate_repository(repository)
+
+    name = repo_name(repository)
+
+    if name in names:
+        raise ValueError(
+            f"Duplicate repository request detected: {name}"
+        )
+
+    names.add(name)
+
+    print(
+        f"[{index}] VALID: "
+        f"{name} "
+        f"({repository['visibility']})"
+    )
+
+
+print()
+print(
+    f"Registry validation successful. "
+    f"Total repositories: {len(repositories)}"
+)
