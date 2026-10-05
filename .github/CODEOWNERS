@@ -1,0 +1,4 @@
+* @MI-INDUSTRIAL/devopscodeowners
+/requests/ @MI-INDUSTRIAL/devopscodeowners
+/.github/workflows/ @MI-INDUSTRIAL/devopscodeowners
+/scripts/ @MI-INDUSTRIAL/devopscodeowners
