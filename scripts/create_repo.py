@@ -12,12 +12,19 @@ from common import (
 )
 
 
-parser = argparse.ArgumentParser()
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
+
+parser = argparse.ArgumentParser(
+    description="Provision GitHub repositories from the repository registry."
+)
 
 parser.add_argument(
     "registry_file",
     nargs="?",
     default="requests/repository-requests.yml",
+    help="Path to the repository request registry YAML file.",
 )
 
 args = parser.parse_args()
@@ -28,15 +35,50 @@ ORG = os.getenv(
     "MI-INDUSTRIAL",
 )
 
+
+# ---------------------------------------------------------
+# Load repository registry
+# ---------------------------------------------------------
+
+repositories = load_registry(
+    args.registry_file
+)
+
+
+# ---------------------------------------------------------
+# Nothing to provision
+# ---------------------------------------------------------
+
+if not repositories:
+
+    print("=" * 60)
+    print("Repository Provisioning")
+    print("=" * 60)
+
+    print("Repository registry contains no requests.")
+    print("Nothing to provision.")
+
+    sys.exit(0)
+
+
+# ---------------------------------------------------------
+# GitHub App authentication
+# ---------------------------------------------------------
+
 TOKEN = os.environ.get(
-    "ORG_ADMIN_TOKEN"
+    "GITHUB_APP_TOKEN"
 )
 
 
 if not TOKEN:
 
     print(
-        "ERROR: ORG_ADMIN_TOKEN is not configured."
+        "ERROR: GITHUB_APP_TOKEN is not available."
+    )
+
+    print(
+        "Confirm that the GitHub App token is generated "
+        "before running this script."
     )
 
     sys.exit(1)
@@ -49,56 +91,66 @@ HEADERS = {
 }
 
 
-repositories = load_registry(
-    args.registry_file
-)
-
-
-if not repositories:
-
-    print(
-        "Repository registry contains no requests."
-    )
-
-    print(
-        "Nothing to provision."
-    )
-
-    sys.exit(0)
-
+# ---------------------------------------------------------
+# Counters
+# ---------------------------------------------------------
 
 created_count = 0
 skipped_count = 0
 
 
+# ---------------------------------------------------------
+# Process repository requests
+# ---------------------------------------------------------
+
 for repository in repositories:
 
+    # Validate repository entry
     repository = validate_repository(
         repository
     )
 
+    # Generate repository name
     name = repo_name(
         repository
     )
 
     print()
     print("=" * 60)
-    print(f"Repository: {name}")
+    print(f"Repository: {ORG}/{name}")
     print("=" * 60)
+
+
+    # -----------------------------------------------------
+    # Check whether repository already exists
+    # -----------------------------------------------------
 
     repo_url = (
         f"https://api.github.com/repos/"
         f"{ORG}/{name}"
     )
 
-    check = requests.get(
-        repo_url,
-        headers=HEADERS,
-        timeout=30,
-    )
+
+    try:
+
+        check = requests.get(
+            repo_url,
+            headers=HEADERS,
+            timeout=30,
+        )
+
+    except requests.RequestException as exc:
+
+        print(
+            "ERROR: Unable to connect to GitHub API."
+        )
+
+        print(str(exc))
+
+        sys.exit(1)
 
 
-    # Repository already exists.
+    # Repository already exists
     if check.status_code == 200:
 
         print(
@@ -115,6 +167,7 @@ for repository in repositories:
         continue
 
 
+    # Expected response when repository does not exist
     if check.status_code != 404:
 
         print(
@@ -130,12 +183,18 @@ for repository in repositories:
         sys.exit(1)
 
 
+    # -----------------------------------------------------
+    # Create repository
+    # -----------------------------------------------------
+
     payload = {
         "name": name,
-        "description":
-            repository["description"].strip(),
-        "visibility":
-            repository["visibility"],
+        "description": repository[
+            "description"
+        ].strip(),
+        "visibility": repository[
+            "visibility"
+        ],
         "auto_init": True,
         "has_issues": True,
         "has_projects": False,
@@ -150,13 +209,26 @@ for repository in repositories:
     )
 
 
-    response = requests.post(
-        f"https://api.github.com/"
-        f"orgs/{ORG}/repos",
-        headers=HEADERS,
-        json=payload,
-        timeout=30,
-    )
+    try:
+
+        response = requests.post(
+            f"https://api.github.com/"
+            f"orgs/{ORG}/repos",
+            headers=HEADERS,
+            json=payload,
+            timeout=30,
+        )
+
+    except requests.RequestException as exc:
+
+        print(
+            "ERROR: GitHub API request failed "
+            "while creating repository."
+        )
+
+        print(str(exc))
+
+        sys.exit(1)
 
 
     if response.status_code != 201:
@@ -177,15 +249,16 @@ for repository in repositories:
 
     repo = response.json()
 
+
     print(
         f"Repository created successfully: "
         f"{repo['html_url']}"
     )
 
 
-    # -----------------------------------------
-    # Read main branch
-    # -----------------------------------------
+    # -----------------------------------------------------
+    # Retrieve main branch
+    # -----------------------------------------------------
 
     main_url = (
         f"https://api.github.com/repos/"
@@ -198,14 +271,30 @@ for repository in repositories:
 
     for attempt in range(1, 6):
 
-        main = requests.get(
-            main_url,
-            headers=HEADERS,
-            timeout=30,
-        )
+        try:
+
+            main = requests.get(
+                main_url,
+                headers=HEADERS,
+                timeout=30,
+            )
+
+        except requests.RequestException as exc:
+
+            print(
+                "ERROR: Unable to retrieve "
+                "main branch."
+            )
+
+            print(str(exc))
+
+            sys.exit(1)
+
 
         if main.status_code == 200:
+
             break
+
 
         print(
             f"Waiting for main branch "
@@ -215,35 +304,72 @@ for repository in repositories:
         time.sleep(2)
 
 
-    if main is None or main.status_code != 200:
+    if (
+        main is None
+        or main.status_code != 200
+    ):
 
         print(
-            "ERROR: Could not retrieve main branch."
+            "ERROR: Could not retrieve "
+            "main branch."
         )
 
         if main is not None:
+
+            print(
+                f"HTTP Status: "
+                f"{main.status_code}"
+            )
+
             print(main.text)
 
         sys.exit(1)
 
 
-    main_sha = main.json()["object"]["sha"]
+    main_sha = main.json()[
+        "object"
+    ][
+        "sha"
+    ]
 
 
-    # -----------------------------------------
-    # Create dev branch
-    # -----------------------------------------
-
-    dev_response = requests.post(
-        f"https://api.github.com/repos/"
-        f"{ORG}/{name}/git/refs",
-        headers=HEADERS,
-        json={
-            "ref": "refs/heads/dev",
-            "sha": main_sha,
-        },
-        timeout=30,
+    print(
+        f"main branch found."
     )
+
+
+    # -----------------------------------------------------
+    # Create dev branch from main
+    # -----------------------------------------------------
+
+    print(
+        "Creating dev branch from main..."
+    )
+
+
+    try:
+
+        dev_response = requests.post(
+            f"https://api.github.com/repos/"
+            f"{ORG}/{name}/git/refs",
+            headers=HEADERS,
+            json={
+                "ref": "refs/heads/dev",
+                "sha": main_sha,
+            },
+            timeout=30,
+        )
+
+    except requests.RequestException as exc:
+
+        print(
+            "ERROR: GitHub API request failed "
+            "while creating dev branch."
+        )
+
+        print(str(exc))
+
+        sys.exit(1)
 
 
     if dev_response.status_code == 201:
@@ -263,7 +389,8 @@ for repository in repositories:
     else:
 
         print(
-            "ERROR: Unable to create dev branch."
+            "ERROR: Unable to create "
+            "dev branch."
         )
 
         print(
@@ -279,10 +406,18 @@ for repository in repositories:
     created_count += 1
 
 
+# ---------------------------------------------------------
+# Final summary
+# ---------------------------------------------------------
+
 print()
 print("=" * 60)
 print("Provisioning Summary")
 print("=" * 60)
+
+print(
+    f"Organization: {ORG}"
+)
 
 print(
     f"Created: {created_count}"
@@ -293,5 +428,8 @@ print(
 )
 
 print(
-    f"Total registry entries: {len(repositories)}"
+    f"Total registry entries: "
+    f"{len(repositories)}"
 )
+
+print("=" * 60)
