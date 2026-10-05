@@ -1,43 +1,43 @@
-name: Provision Approved Repository 
- 
-on: 
-  push: 
-    branches: [main] 
-    paths: 
-      - "requests/*.yml" 
- 
-permissions: 
-  contents: read 
- 
-jobs: 
-  provision: 
-    runs-on: ubuntu-latest 
-    steps: 
-      - name: Checkout 
-        uses: actions/checkout@v4 
-        with: 
-          fetch-depth: 0 
- 
-      - name: Setup Python 
-        uses: actions/setup-python@v5 
-        with: 
-          python-version: "3.12" 
- 
-      - name: Install dependencies 
-        run: pip install -r requirements.txt 
- 
-      - name: Provision newly approved repositories 
-        env: 
-          BEFORE_SHA: ${{ github.event.before }} 
-          AFTER_SHA: ${{ github.sha }} 
-          GITHUB_ORG: MI-INDUSTRIAL 
-          ORG_ADMIN_TOKEN: ${{ secrets.ORG_ADMIN_TOKEN }} 
-        run: | 
-          files=$(git diff --diff-filter=A --name-only "$BEFORE_SHA" "$AFTER_SHA" -- 'requests/*.yml') 
-          if [ -z "$files" ]; then 
-            echo "No newly added repository request found." 
-            exit 0 
-          fi 
-          while IFS= read -r file; do 
-            python scripts/create_repo.py "$file" 
-          done <<< "$files"
+name: Provision Repository
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "requests/repository-requests.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Provision Repositories
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate repository registry
+        run: |
+          python scripts/validate_request.py requests/repository-requests.yml
+
+      - name: Provision repositories
+        env:
+          GITHUB_ORG: MI-INDUSTRIAL
+          ORG_ADMIN_TOKEN: ${{ secrets.ORG_ADMIN_TOKEN }}
+        run: |
+          python scripts/create_repo.py requests/repository-requests.yml
