@@ -60,6 +60,7 @@ jobs:
         with:
           client-id: ${{ vars.REPO_MANAGER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REPO_MANAGER_PRIVATE_KEY }}
+          owner: MI-INDUSTRIAL
 
       # ---------------------------------------------------
       # Provision missing repositories
