@@ -1,0 +1,41 @@
+name: Validate Repository Request 
+ 
+on: 
+  pull_request: 
+    branches: [main] 
+    paths: 
+      - "requests/*.yml" 
+ 
+permissions: 
+  contents: read 
+ 
+jobs: 
+  validate: 
+    runs-on: ubuntu-latest 
+    steps: 
+      - name: Checkout pull request 
+        uses: actions/checkout@v4 
+        with: 
+          fetch-depth: 0 
+ 
+      - name: Setup Python 
+        uses: actions/setup-python@v5 
+        with: 
+          python-version: "3.12" 
+ 
+      - name: Install dependencies 
+        run: pip install -r requirements.txt 
+ 
+      - name: Validate newly added request files 
+        env: 
+          BASE_SHA: ${{ github.event.pull_request.base.sha }} 
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }} 
+        run: | 
+          files=$(git diff --diff-filter=A --name-only "$BASE_SHA" "$HEAD_SHA" -- 'requests/*.yml') 
+          if [ -z "$files" ]; then 
+            echo "Repository request PR must add at least one requests/*.yml file." 
+            exit 1 
+          fi 
+          while IFS= read -r file; do 
+            python scripts/validate_request.py "$file" 
+          done <<< "$files"
