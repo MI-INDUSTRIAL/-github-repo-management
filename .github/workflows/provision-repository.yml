@@ -1,12 +1,15 @@
 name: Provision Repository
 
 on:
+  # Automatically run after an approved change to the
+  # repository registry is merged into main.
   push:
     branches:
       - main
     paths:
       - "requests/repository-requests.yml"
 
+  # Allows DevOps to run/re-run the workflow manually.
   workflow_dispatch:
 
 permissions:
@@ -18,26 +21,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
 
+      # ---------------------------------------------------
+      # Checkout central repository
+      # ---------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # ---------------------------------------------------
+      # Setup Python
+      # ---------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
+      # ---------------------------------------------------
+      # Install Python dependencies
+      # ---------------------------------------------------
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # ---------------------------------------------------
+      # Validate unified repository registry
+      # ---------------------------------------------------
       - name: Validate repository registry
         run: |
           python scripts/validate_request.py requests/repository-requests.yml
 
+      # ---------------------------------------------------
+      # Generate short-lived GitHub App installation token
+      # ---------------------------------------------------
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.REPO_MANAGER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REPO_MANAGER_PRIVATE_KEY }}
+          owner: MI-INDUSTRIAL
+
+      # ---------------------------------------------------
+      # Provision missing repositories
+      # ---------------------------------------------------
       - name: Provision repositories
         env:
           GITHUB_ORG: MI-INDUSTRIAL
-          ORG_ADMIN_TOKEN: ${{ secrets.ORG_ADMIN_TOKEN }}
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           python scripts/create_repo.py requests/repository-requests.yml
