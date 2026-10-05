@@ -1,7 +1,1 @@
 repositories: []
- 
-#product: edgeai
-#purpose: object-detection
-#service: api
-#description: Object detection inference API
-#visibility: private
