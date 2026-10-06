@@ -1,1 +1,6 @@
-repositories: []
+repositories: 
+  - product: lille
+    purpose: model-training
+    service: pipeline
+    description: Internal platform for image annotation, training dataset preparation, and model training using user-provided training scripts and model parameters.
+    visibility: private
