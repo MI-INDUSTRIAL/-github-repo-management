@@ -4,3 +4,9 @@ repositories:
     service: pipeline
     description: Internal platform for image annotation, training dataset preparation, and model training using user-provided training scripts and model parameters.
     visibility: private
+
+  - product: github
+    purpose: access-management
+    service: automation
+    description: Centralized platform for automating GitHub repository and team access management operations, including user access grant/revoke workflows, approval-based access requests, permission validation, audit logging, notifications, and GitHub governance automation.
+    visibility: private
