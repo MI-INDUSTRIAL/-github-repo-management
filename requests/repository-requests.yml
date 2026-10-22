@@ -10,3 +10,9 @@ repositories:
     service: automation
     description: Centralized platform for automating GitHub repository and team access management operations, including user access grant/revoke workflows, approval-based access requests, permission validation, audit logging, notifications, and GitHub governance automation.
     visibility: private
+
+  - product: github
+    purpose: lifecycle-test
+    service: validation
+    description: Temporary repository for validating GitHub repository lifecycle automation workflows including archive, unarchive, and deletion.
+    visibility: private
