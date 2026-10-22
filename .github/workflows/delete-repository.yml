@@ -1,0 +1,49 @@
+name: Delete Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository Name"
+        required: true
+
+      confirmation:
+        description: "Type DELETE to confirm"
+        required: true
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: repository-deletion-approval
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.REPO_MANAGER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REPO_MANAGER_PRIVATE_KEY }}
+          owner: MI-INDUSTRIAL
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Delete Repository
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.event.inputs.repository }}
+          ORG_NAME: MI-INDUSTRIAL
+          CONFIRMATION: ${{ github.event.inputs.confirmation }}
+        run: |
+          python scripts/delete_repository.py
